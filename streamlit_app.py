@@ -684,67 +684,63 @@ def render_identify_page(care_data):
 
     # Fetch and parse user agent if not already done
     if JS_EVAL_AVAILABLE and st.session_state.device_is_mobile_or_tablet is None:
-        # This will cause a rerun. The result will be in st.session_state.ua_string_result after the rerun.
-        ua_string = streamlit_js_eval(js_expressions='navigator.userAgent', key='ua_string_result', want_output=True)
-        if ua_string: # If ua_string is fetched
+        ua_string = streamlit_js_eval(js_expressions='navigator.userAgent', key='ua_string_result_v2', want_output=True) # Ensure unique key
+        if ua_string: 
             st.session_state.user_agent_string = ua_string
             parsed_ua = ua_parse(ua_string)
             st.session_state.device_is_mobile_or_tablet = parsed_ua.is_mobile or parsed_ua.is_tablet
-            st.rerun() # Rerun once more to use the new session state for rendering
-        elif st.session_state.user_agent_string is None: # Still waiting for js_eval
+            st.rerun() 
+        elif st.session_state.user_agent_string is None: 
             st.info("Determining device type...")
-            # To prevent an infinite loop if js_eval fails for some reason after a few tries:
             if 'ua_fetch_attempts' not in st.session_state:
                 st.session_state.ua_fetch_attempts = 0
             st.session_state.ua_fetch_attempts += 1
-            if st.session_state.ua_fetch_attempts > 3: # Fallback after 3 tries
-                st.session_state.device_is_mobile_or_tablet = False # Default to non-mobile (tabs)
+            if st.session_state.ua_fetch_attempts > 3: 
+                st.session_state.device_is_mobile_or_tablet = False 
                 st.warning("Could not determine device type, showing default input options.")
                 st.rerun()
-            return # Wait for rerun
+            return 
 
     img_bytes = None
     img_type = None
 
     # Conditional rendering based on device type
-    if st.session_state.device_is_mobile_or_tablet: # Prioritize camera for mobile/tablet
+    if st.session_state.device_is_mobile_or_tablet: 
         st.markdown("Use your device's camera to take a picture of the plant.")
         camera_photo_buffer = st.camera_input(
             "Tap to activate camera...", 
-            key="id_camera_input_mobile",
+            key="id_camera_input_mobile_v2", # Unique key
             label_visibility="collapsed"
         )
         if camera_photo_buffer:
             img_bytes = camera_photo_buffer.getvalue()
             img_type = camera_photo_buffer.type
 
-        # Optionally, offer file upload as a secondary option for mobile
         with st.expander("Or upload a file instead?"):
             uploaded_file_buffer_mobile = st.file_uploader(
                 "Select an image file:", 
                 type=["jpg", "jpeg", "png"], 
-                key="id_file_uploader_mobile_secondary",
+                key="id_file_uploader_mobile_secondary_v2", # Unique key
                 label_visibility="collapsed"
             )
             if uploaded_file_buffer_mobile:
-                img_bytes = uploaded_file_buffer_mobile.getvalue() # Overrides camera if both used
+                img_bytes = uploaded_file_buffer_mobile.getvalue() 
                 img_type = uploaded_file_buffer_mobile.type
                 
-    elif JS_EVAL_AVAILABLE == False and st.session_state.device_is_mobile_or_tablet is None:
-        # Fallback if streamlit_js_eval is not installed - show tabs by default
+    elif not JS_EVAL_AVAILABLE and st.session_state.device_is_mobile_or_tablet is None:
         st.warning("`streamlit_js_eval` not installed. Showing default input options. Install it for a better mobile experience (`pip install streamlit_js_eval`).")
-        st.session_state.device_is_mobile_or_tablet = False # Proceed with tabbed desktop view
+        st.session_state.device_is_mobile_or_tablet = False 
         st.rerun()
 
-    else: # Desktop or if detection failed and defaulted, or if JS_EVAL_AVAILABLE is False
+    else: 
         input_method_tab1, input_method_tab2 = st.tabs(["⬆️ Upload File", "📷 Take Photo (Webcam)"])
 
-        with input_method_tab1: # File uploader first for desktop
+        with input_method_tab1: 
             st.markdown("Upload an image file from your device.")
             uploaded_file_buffer_desktop = st.file_uploader(
                 "Select an image file:", 
                 type=["jpg", "jpeg", "png"], 
-                key="id_file_uploader_desktop_primary",
+                key="id_file_uploader_desktop_primary_v2", # Unique key
                 label_visibility="collapsed"
             )
             if uploaded_file_buffer_desktop:
@@ -755,14 +751,14 @@ def render_identify_page(care_data):
             st.markdown("Use your webcam to take a picture.")
             camera_photo_buffer_desktop = st.camera_input(
                 "Click to activate camera...", 
-                key="id_camera_input_desktop_secondary",
+                key="id_camera_input_desktop_secondary_v2", # Unique key
                 label_visibility="collapsed"
             )
             if camera_photo_buffer_desktop:
-                img_bytes = camera_photo_buffer_desktop.getvalue() # Overrides upload if both used
+                img_bytes = camera_photo_buffer_desktop.getvalue() 
                 img_type = camera_photo_buffer_desktop.type
 
-    # --- Common processing logic (same as before) ---
+    # --- Common processing logic after image is obtained ---
     if img_bytes:
         new_image_uploaded = False
         if st.session_state.current_id_image_bytes != img_bytes:
@@ -780,39 +776,41 @@ def render_identify_page(care_data):
                 )
                 if st.session_state.current_id_result and 'error' not in st.session_state.current_id_result:
                     st.session_state.current_id_care_info = find_care_instructions(st.session_state.current_id_result, care_data)
-                    if not st.session_state.current_id_care_info:
+                    if not st.session_state.current_id_care_info: # Only find suggestions if no exact care info
                         st.session_state.current_id_suggestions = find_similar_plant_matches(st.session_state.current_id_result, care_data)
-                    else: 
+                    else: # Exact care info found, so no suggestions needed
                         st.session_state.current_id_suggestions = [] 
-                else: 
+                else: # Error in identification
                     st.session_state.current_id_care_info = None
-                    st.session_state.current_id_suggestions = []
+                    st.session_state.current_id_suggestions = [] # Clear suggestions on error too
             st.rerun() 
 
-    # --- Display image and results tabs (same as before) ---
+    # --- Display image and results tabs if an image has been processed ---
     if st.session_state.current_id_image_bytes and st.session_state.current_id_result:
         st.divider()
         display_image_with_max_height(st.session_state.current_id_image_bytes, "Your Plant", max_height_px=350, use_container_width=True, fit_contain=True)
         st.divider()
 
         result_tab, chat_tab, save_tab = st.tabs(["🔍 Results & Care", "💬 Chat", "💾 Save"])
-        # ... (content for result_tab, chat_tab, save_tab - this logic remains largely the same) ...
+        
         with result_tab:
             st.subheader("Identification & Care Information")
             display_identification_result_summary(st.session_state.current_id_result)
+            st.markdown("---") # Separator after main ID summary
             
             if st.session_state.current_id_result and 'error' not in st.session_state.current_id_result:
                 if st.session_state.current_id_care_info:
                     display_care_instructions_details(st.session_state.current_id_care_info)
-                elif st.session_state.current_id_suggestions: 
+                elif st.session_state.current_id_suggestions: # Check if suggestions list exists and is not empty
                     display_suggestion_buttons_for_id_flow(st.session_state.current_id_suggestions, care_data)
                 else: 
-                    if isinstance(st.session_state.current_id_suggestions, list) and not st.session_state.current_id_suggestions:
-                        st.info("No specific care instructions found, and no further matches in our database for this identification.")
-                    else: 
-                        st.info("No specific care instructions found in our database for this identification.")
+                    # This handles cases where:
+                    # 1. Suggestions were never searched for (because care_info was found initially).
+                    # 2. Suggestions were searched, but none were found (current_id_suggestions is an empty list).
+                    # 3. Suggestions were cleared after one was selected (current_id_suggestions is an empty list).
+                    st.info("No specific care instructions found in our database for this identification, and no further close matches to suggest.")
             else: 
-                 st.warning("Cannot fetch care information due to identification error.")
+                 st.warning("Cannot fetch care information due to an error in plant identification.")
 
         with chat_tab:
             st.subheader("Chat With This Plant")
@@ -838,7 +836,7 @@ def render_identify_page(care_data):
                     plant_care_info_dict=st.session_state.current_id_care_info,
                     plant_id_result_dict=st.session_state.current_id_result,
                     on_new_message_submit=id_chat_rerun_callback,
-                    chat_input_key_suffix="identify_flow_auto_ua", 
+                    chat_input_key_suffix="identify_flow_auto_ua_v3", 
                     image_bytes_for_current_message=image_to_send_with_chat,
                     image_type_for_current_message=image_type_to_send_with_chat
                 )
@@ -851,7 +849,7 @@ def render_identify_page(care_data):
                 default_nick = st.session_state.current_id_result.get('common_name') or \
                                st.session_state.current_id_result.get('scientific_name', 'My Plant')
                 
-                with st.form("save_id_form_auto_ua"):
+                with st.form("save_id_form_auto_ua_v3"):
                     plant_nickname = st.text_input("Plant Nickname:", value=default_nick)
                     submitted_save = st.form_submit_button("✅ Confirm & Save to My Plants")
 
@@ -866,7 +864,7 @@ def render_identify_page(care_data):
                                 "nickname": plant_nickname,
                                 "image": f"data:{st.session_state.current_id_image_type or 'image/jpeg'};base64,{img_b64}",
                                 "id_result": st.session_state.current_id_result,
-                                "care_info": st.session_state.current_id_care_info,
+                                "care_info": st.session_state.current_id_care_info, 
                                 "chat_log": st.session_state.current_id_chat_history,
                                 "moisture_level": random.randint(30,90),
                                 "temperature_value": random.uniform(65.0, 78.0),
@@ -882,12 +880,11 @@ def render_identify_page(care_data):
             else:
                 st.info("Plant identified. Save option will be available if identification was successful.")
     
-    elif not img_bytes and st.session_state.device_is_mobile_or_tablet is not None : # No image provided yet, but device type known
+    elif not img_bytes and st.session_state.device_is_mobile_or_tablet is not None : 
         if st.session_state.device_is_mobile_or_tablet:
             st.info("Tap above to use your camera or expand to upload a file.")
-        else:
+        else: # Desktop view message before any upload
             st.info("Use the tabs above to upload an image file or take a photo to identify your plant.")
-
 
 def render_my_plants_page(care_data):
     st.header("🪴 My Saved Plant Profiles")
