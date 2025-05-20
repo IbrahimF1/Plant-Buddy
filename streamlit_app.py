@@ -674,24 +674,50 @@ def render_home_page(care_data):
 def render_identify_page(care_data):
     st.header("🔎 Identify a New Plant")
 
-    # File uploader is the primary action now
-    up_file = st.file_uploader("Upload a clear photo of your plant to identify it:", type=["jpg","jpeg","png"], key="id_uploader_auto")
+    # Let user choose input method via tabs
+    input_method_tab1, input_method_tab2 = st.tabs(["📷 Take Photo", "⬆️ Upload File"])
     
-    if up_file:
-        new_file_bytes = up_file.getvalue()
-        # Check if it's a truly new image or if the user re-uploaded the same file (getvalue() would be the same)
-        # Or if current_id_result is None (meaning it's the first upload or after a clear)
-        if st.session_state.current_id_image_bytes != new_file_bytes or not st.session_state.current_id_result:
+    img_bytes = None
+    img_type = None # Store the MIME type if available
+
+    with input_method_tab1:
+        st.markdown("Use your device's camera to take a picture of the plant.")
+        camera_photo_buffer = st.camera_input("Click to activate camera...", key="id_camera_input", label_visibility="collapsed")
+        if camera_photo_buffer:
+            img_bytes = camera_photo_buffer.getvalue()
+            img_type = camera_photo_buffer.type # Usually image/jpeg or image/png from camera
+
+    with input_method_tab2:
+        st.markdown("Or, upload an image file from your device.")
+        uploaded_file_buffer = st.file_uploader(
+            "Select an image file:", 
+            type=["jpg", "jpeg", "png"], 
+            key="id_file_uploader",
+            label_visibility="collapsed" # Assuming the markdown above is enough label
+        )
+        if uploaded_file_buffer:
+            img_bytes = uploaded_file_buffer.getvalue()
+            img_type = uploaded_file_buffer.type
+
+    # --- Common processing logic after image is obtained ---
+    if img_bytes:
+        # Check if this is a new image compared to what's in session state
+        # This ensures re-processing if the user uploads a new image via the same method
+        # or switches method and provides an image.
+        new_image_uploaded = False
+        if st.session_state.current_id_image_bytes != img_bytes:
+            new_image_uploaded = True
             clear_current_identification_flow_data() 
-            st.session_state.current_id_image_bytes = new_file_bytes
-            st.session_state.current_id_image_type = up_file.type
+            st.session_state.current_id_image_bytes = img_bytes
+            st.session_state.current_id_image_type = img_type 
+            # Flag that the main image for the ID flow should be sent with the *first* chat message
             st.session_state.current_id_send_image_with_next_message = True 
-            
-            # Automatically trigger identification
+        
+        if new_image_uploaded or not st.session_state.current_id_result: # Process if new or no result yet
             with st.spinner("Identifying your plant... 🌱"):
                 st.session_state.current_id_result = identify_plant_wrapper(
                     st.session_state.current_id_image_bytes, 
-                    "uploaded_plant_image.jpg" # filename can be generic
+                    "plant_image_from_input" # Generic filename
                 )
                 if st.session_state.current_id_result and 'error' not in st.session_state.current_id_result:
                     st.session_state.current_id_care_info = find_care_instructions(st.session_state.current_id_result, care_data)
@@ -702,35 +728,34 @@ def render_identify_page(care_data):
                 else: 
                     st.session_state.current_id_care_info = None
                     st.session_state.current_id_suggestions = []
-            st.rerun() # Rerun to display results and tabs
+            st.rerun() # Rerun to display results and subsequent tabs
 
+    # --- Display image and results tabs if an image has been processed ---
     if st.session_state.current_id_image_bytes and st.session_state.current_id_result:
         st.divider()
         display_image_with_max_height(st.session_state.current_id_image_bytes, "Your Plant", max_height_px=350, use_container_width=True, fit_contain=True)
         st.divider()
 
-        # Tabs are shown only after identification result is available
-        tab1, tab2, tab3 = st.tabs(["🔍 Results & Care", "💬 Chat", "💾 Save"])
+        result_tab, chat_tab, save_tab = st.tabs(["🔍 Results & Care", "💬 Chat", "💾 Save"])
 
-        with tab1:
+        with result_tab:
             st.subheader("Identification & Care Information")
             display_identification_result_summary(st.session_state.current_id_result)
             
             if st.session_state.current_id_result and 'error' not in st.session_state.current_id_result:
                 if st.session_state.current_id_care_info:
                     display_care_instructions_details(st.session_state.current_id_care_info)
-                elif st.session_state.current_id_suggestions: # Only show if suggestions exist
+                elif st.session_state.current_id_suggestions: 
                     display_suggestion_buttons_for_id_flow(st.session_state.current_id_suggestions, care_data)
-                else: # No care info and no suggestions (or suggestions processed and now empty list)
+                else: 
                     if isinstance(st.session_state.current_id_suggestions, list) and not st.session_state.current_id_suggestions:
                         st.info("No specific care instructions found, and no further matches in our database for this identification.")
-                    else: # Suggestions might still be None if not searched yet, or search yielded nothing
+                    else: 
                         st.info("No specific care instructions found in our database for this identification.")
-            else: # Error in identification result
+            else: 
                  st.warning("Cannot fetch care information due to identification error.")
 
-
-        with tab2:
+        with chat_tab:
             st.subheader("Chat With This Plant")
             if st.session_state.current_id_result and 'error' not in st.session_state.current_id_result:
                 chatbot_name = st.session_state.current_id_result.get('common_name') or st.session_state.current_id_result.get('scientific_name', 'this plant')
@@ -738,15 +763,16 @@ def render_identify_page(care_data):
                      chatbot_name = st.session_state.current_id_care_info.get('Plant Name', chatbot_name)
                 
                 def id_chat_rerun_callback():
+                    # This flag ensures the main identified image is only sent once with the first relevant message
                     if st.session_state.current_id_send_image_with_next_message:
                         st.session_state.current_id_send_image_with_next_message = False
                     st.rerun()
 
-                image_to_send = None
-                image_type_to_send = None
+                image_to_send_with_chat = None
+                image_type_to_send_with_chat = None
                 if st.session_state.current_id_send_image_with_next_message: 
-                    image_to_send = st.session_state.current_id_image_bytes
-                    image_type_to_send = st.session_state.current_id_image_type
+                    image_to_send_with_chat = st.session_state.current_id_image_bytes
+                    image_type_to_send_with_chat = st.session_state.current_id_image_type
                 
                 display_chat_ui_custom(
                     chat_history_list=st.session_state.current_id_chat_history,
@@ -754,20 +780,20 @@ def render_identify_page(care_data):
                     plant_care_info_dict=st.session_state.current_id_care_info,
                     plant_id_result_dict=st.session_state.current_id_result,
                     on_new_message_submit=id_chat_rerun_callback,
-                    chat_input_key_suffix="identify_flow_auto",
-                    image_bytes_for_current_message=image_to_send,
-                    image_type_for_current_message=image_type_to_send
+                    chat_input_key_suffix="identify_flow_tabs",
+                    image_bytes_for_current_message=image_to_send_with_chat, # Pass the main image if flagged
+                    image_type_for_current_message=image_type_to_send_with_chat
                 )
             else:
                 st.info("Plant identified. Chat will be available if identification was successful.")
 
-        with tab3:
+        with save_tab:
             st.subheader("Save Plant Profile")
             if st.session_state.current_id_result and 'error' not in st.session_state.current_id_result:
                 default_nick = st.session_state.current_id_result.get('common_name') or \
                                st.session_state.current_id_result.get('scientific_name', 'My Plant')
                 
-                with st.form("save_id_form_auto"):
+                with st.form("save_id_form_tabs"):
                     plant_nickname = st.text_input("Plant Nickname:", value=default_nick)
                     submitted_save = st.form_submit_button("✅ Confirm & Save to My Plants")
 
@@ -780,7 +806,7 @@ def render_identify_page(care_data):
                             img_b64 = base64.b64encode(st.session_state.current_id_image_bytes).decode()
                             st.session_state.saved_photos[plant_nickname] = {
                                 "nickname": plant_nickname,
-                                "image": f"data:{st.session_state.current_id_image_type};base64,{img_b64}",
+                                "image": f"data:{st.session_state.current_id_image_type or 'image/jpeg'};base64,{img_b64}", # Added fallback for img_type
                                 "id_result": st.session_state.current_id_result,
                                 "care_info": st.session_state.current_id_care_info,
                                 "chat_log": st.session_state.current_id_chat_history,
@@ -797,12 +823,9 @@ def render_identify_page(care_data):
                             st.rerun()
             else:
                 st.info("Plant identified. Save option will be available if identification was successful.")
-    elif up_file and not st.session_state.current_id_result: 
-        # This case might occur if identification failed immediately on upload and rerun didn't show tabs
-        st.warning("Could not identify the plant. Please try a different image or check API keys.")
-    else: # No file uploaded yet
-        st.info("Upload an image above to automatically identify your plant.")
-
+    
+    elif not img_bytes: # No image provided yet from either method
+        st.info("Use the tabs above to either take a photo or upload an image file to identify your plant.")
 
 def render_my_plants_page(care_data):
     st.header("🪴 My Saved Plant Profiles")
