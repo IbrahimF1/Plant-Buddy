@@ -19,6 +19,26 @@
       "Prompt": "I might not reveal myself right away, but give me time and I\u2019ll show you a plant full of quiet beauty and hidden charm."
     }
   },
+    {
+
+    "Plant Name": "Peace Lily (Spathiphyllum)",
+    "Light Requirements": "Bright, indirect light; tolerates low light but avoid direct sunlight",
+    "Watering": "Water when the top 1-2 inches of soil feel dry; prefers to be slightly under-watered rather than overwatered",
+    "Humidity Preferences": "High humidity; mist leaves regularly or place in a humid environment",
+    "Temperature Range": "18–27°C (65–80°F); avoid temperatures below 16°C (60°F) and cold drafts",
+    "Feeding Schedule": "Apply a balanced, diluted liquid fertilizer every 6–8 weeks during spring and summer",
+    "Toxicity": "Toxic to pets and humans if ingested due to insoluble calcium oxalate crystals; causes oral irritation, drooling, and vomiting",
+    "Additional Care": "Use well-draining, fertile soil rich in organic matter. Repot in spring if root-bound. Wipe leaves with a damp cloth to keep them dust-free. Avoid overfertilizing to prevent leaf tip burn. Excellent air purifier according to NASA.",
+    "Personality": {
+      "Title": "The Tranquil Purifier",
+      "Traits": [
+        "Graceful and calming presence",
+        "Low-maintenance but sensitive to overwatering",
+        "Air-cleansing and adaptable to most indoor spaces"
+      ],
+      "Prompt": "I bring peace and fresh air to your home with minimal fuss. Just a little care and the right spot, and I’ll reward you with glossy leaves and elegant white blooms."
+    }
+  },
   {
     
   "Plant Name": "Acacia auriculiformis",
